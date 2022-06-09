@@ -2,11 +2,6 @@ const NuffRespect = artifacts.require("NuffRespect");
 const Staking = artifacts.require("Staking");
 const StakingExposedTest = artifacts.require("StakingExposedTest");
 
-/*
- * uncomment accounts to access the test accounts made available by the
- * Ethereum client
- * See docs: https://www.trufflesuite.com/docs/truffle/testing/writing-tests-in-javascript
- */
 contract("NuffRespect", function (accounts) {
   it("should assert true", async function () {
     await NuffRespect.deployed();
@@ -17,13 +12,13 @@ contract("NuffRespect", function (accounts) {
     const instance = await NuffRespect.deployed();
     const expected = 2_00_000_000;
     const balance = await instance.balanceOf(accounts[0]);
-    const weiBalance = web3.utils.fromWei(balance, 'ether');
+    const weiBalance = web3.utils.fromWei(balance, "ether");
     assert(expected, weiBalance);
   });
 });
 
 contract("Staking", function (accounts) {
-  it("approve should set allowance", async() => {
+  it("approve should set allowance", async () => {
     const staking = await Staking.deployed();
     const nuff = await NuffRespect.deployed();
 
@@ -35,7 +30,7 @@ contract("Staking", function (accounts) {
     assert.equal(amount, allowance, "not enough allowance");
   });
 
-  it("calculate reward should return 10 when amount 100 and plan 10", async() => {
+  it("calculate reward should return 10 when amount 100 and plan 10", async () => {
     const stakingExp = await StakingExposedTest.deployed();
     const amount = 100;
     const plan = 10;
@@ -44,38 +39,38 @@ contract("Staking", function (accounts) {
     assert.equal(expected, actual);
   });
 
-  it("calculate reward should return rounded result when its not an integer", async() => {
+  it("calculate reward should return rounded result when its not an integer", async () => {
     const stakingExp = await StakingExposedTest.deployed();
     const amount = 111;
     const plan = 75;
     const expected = 83;
     const actual = await stakingExp._calculateReward(plan, amount);
     assert.equal(expected, actual);
-  })
+  });
 
-  it("calculate plan should return 5 when time is within 15 seconds", async() => {
+  it("calculate plan should return 5 when time is within 15 seconds", async () => {
     const stakingExp = await StakingExposedTest.deployed();
     const time = Math.floor(new Date().getTime() / 1000) - 15;
     const expected = 5;
     const actual = await stakingExp._calculatePlan(time);
     assert.equal(expected, actual);
-  })
+  });
 
-  it("calculate cover should return 75% of the amount", async() => {
+  it("calculate cover should return 75% of the amount", async () => {
     const stakingExp = await StakingExposedTest.deployed();
     const amount = 100;
     const expected = 75;
     const actual = await stakingExp._calculateCover(amount);
     assert.equal(expected, actual);
-  })
+  });
 
-  it("should calculate cover when number is not easily divisible", async() => {
+  it("should calculate cover when number is not easily divisible", async () => {
     const stakingExp = await StakingExposedTest.deployed();
     const amount = 111;
     const expected = 83;
     const actual = await stakingExp._calculateCover(amount);
     assert.equal(expected, actual);
-  })
+  });
 
   it("should stake 100", async () => {
     const staking = await Staking.deployed();
@@ -120,7 +115,25 @@ contract("Staking", function (accounts) {
     );
   });
 
-  it("should stake 100 and unstake 175", async() => {
+  it("stake should throw an exception when below 100", async () => {});
+
+  it("stake should throw an exception when not enough allowance", async () => {});
+
+  it("stake should throw an exception when not enough balance", async () => {});
+
+  it("stake should throw an exception when inactive", async () => {});
+
+  it("stake should throw an exception when coverage not sufficient", async () => {});
+
+  it("unstake should throw an exception when nothing to unstake", async () => {});
+
+  it("get resources should return resources", async () => {});
+
+  it("get coverage should return coverage", async () => {});
+
+  it("get amount should return amount", async () => {});
+
+  it("should stake 100 and unstake 175", async () => {
     const staking = await Staking.deployed();
     const nuff = await NuffRespect.deployed();
     const amount = BigInt(100);
@@ -144,6 +157,5 @@ contract("Staking", function (accounts) {
     });
 
     //time forward
-
-  })
+  });
 });

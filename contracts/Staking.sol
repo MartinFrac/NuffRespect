@@ -48,6 +48,7 @@ contract Staking is Ownable {
     _timestampToPlan[_thirdPlan] = 75;
     _isActive = true;
     _coverage = 0;
+    _minStaked = 100;
   }
 
   function setStatus(bool status) public onlyOwner {
@@ -79,14 +80,16 @@ contract Staking is Ownable {
     return _resources;
   }
 
+  function getCoverage() public onlyOwner view returns (uint256) {
+    return _coverage;
+  }
+
   function getAmount() public view returns (uint256) {
     return _stakes[msg.sender].amount;
   }
 
   function stake(uint256 amount) public checkActive checkCoverage(amount) {
     require(amount >= _minStaked, "The minimum staking amount is 100");
-    require(amount <= _tokenAddress.allowance(msg.sender, address(this)), "Not enough allowance");
-    require(amount <= _tokenAddress.balanceOf(msg.sender), "Not enough tokens in your wallet, please try lesser amount");
     _stakes[msg.sender] = Stake(amount, block.timestamp);
     _coverage = _coverage.add(calculateCover(amount));
     _tokenAddress.safeTransferFrom(msg.sender, address(this), amount);
