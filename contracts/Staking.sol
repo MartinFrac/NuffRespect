@@ -1,35 +1,106 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.4;
+pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Staking {
+contract Staking is Ownable {
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
-  IERC20 public tokenAddress;
-  address public owner;
+  IERC20 private _tokenAddress;
+  bool private _isActive;
+  uint256 private _minStaked;
+  uint256 private _resources;
+  uint256 private _coverage;
+  uint256 private _firstPlan;
+  uint256 private _secondPlan;
+  uint256 private _thirdPlan;
 
   struct Stake {
     uint256 amount;
     uint256 timestamp;
   }
 
-  mapping(address => Stake) public stakes;
+  modifier checkActive() {
+    require(_isActive == true, "Staking is inactive");
+    _;
+  }
+
+  modifier checkCoverage(uint256 amount) {
+    require(_resources >= _coverage.add(calculateCover(amount)));
+    _;
+  }
+
+  mapping(address => Stake) private _stakes;
+  mapping(uint256 => uint256) private _timestampToPlan;
 
   constructor(IERC20 _contractAddress) {
-    owner = msg.sender;
-    tokenAddress = _contractAddress;
+    _tokenAddress = _contractAddress;
+    //2592000
+    //7776000
+    //15552000
+    _firstPlan = 20;
+    _secondPlan = 40;
+    _thirdPlan = 60;
+    _timestampToPlan[_firstPlan] = 5;
+    _timestampToPlan[_secondPlan] = 20;
+    _timestampToPlan[_thirdPlan] = 75;
+    _isActive = true;
+    _coverage = 0;
+  }
+
+  function setStatus(bool status) public onlyOwner {
+    _isActive = status;
+  }
+
+  function calculateReward(uint256 plan, uint256 amount) internal pure returns (uint256) {
+    uint256 reward = amount.mul(plan).div(100);
+    return reward;
+  }
+
+  function calculatePlan(uint256 time) internal view returns (uint256) {
+    uint256 passed = block.timestamp.sub(time);
+    if (passed >= _thirdPlan) return _timestampToPlan[_thirdPlan];
+    if (passed >= _secondPlan) return _timestampToPlan[_secondPlan];
+    return _timestampToPlan[_firstPlan];
+  }
+
+  function calculateCover(uint256 amount) internal view returns (uint256) {
+    return amount.mul(_timestampToPlan[_thirdPlan]).div(100);
+  }
+
+  function topUp(uint256 amount) public onlyOwner {
+    _tokenAddress.transferFrom(msg.sender, address(this), amount);
+    _resources = _resources.add(amount);
+  }
+
+  function getResources() public onlyOwner view returns (uint256) {
+    return _resources;
   }
 
   function getAmount() public view returns (uint256) {
-    return stakes[msg.sender].amount;
+    return _stakes[msg.sender].amount;
   }
 
-  function stake(uint256 amount) public {
-    require(amount <= tokenAddress.allowance(msg.sender, address(this)));
-    require(amount <= tokenAddress.balanceOf(msg.sender), "Not enough STATE tokens in your wallet, please try lesser amount");
-    stakes[msg.sender] = Stake(amount, block.timestamp);
-    tokenAddress.safeTransferFrom(msg.sender, address(this), amount);
+  function stake(uint256 amount) public checkActive checkCoverage(amount) {
+    require(amount >= _minStaked, "The minimum staking amount is 100");
+    require(amount <= _tokenAddress.allowance(msg.sender, address(this)), "Not enough allowance");
+    require(amount <= _tokenAddress.balanceOf(msg.sender), "Not enough tokens in your wallet, please try lesser amount");
+    _stakes[msg.sender] = Stake(amount, block.timestamp);
+    _coverage = _coverage.add(calculateCover(amount));
+    _tokenAddress.safeTransferFrom(msg.sender, address(this), amount);
+  }
+
+  function unstake() public {
+    uint256 staked = _stakes[msg.sender].amount;
+    require(staked > 0, "Nothing to unstake");
+    uint256 cover = calculateCover(staked);
+    uint256 plan = calculatePlan(_stakes[msg.sender].timestamp);
+    uint256 reward = calculateReward(plan, staked);
+    _coverage = _coverage.sub(cover);
+    _resources = _resources.sub(reward);
+    _stakes[msg.sender].amount = 0;
+    _tokenAddress.transfer(msg.sender, staked.add(reward));
   }
 }
