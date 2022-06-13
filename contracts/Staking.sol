@@ -10,12 +10,17 @@ contract Staking is Ownable {
   using SafeMath for uint256;
   IERC20 private _tokenAddress;
   bool private _isActive;
-  uint256 private _minStaked;
+  uint256 private _minStakingAmount;
   uint256 private _resources;
   uint256 private _coverage;
+  uint256 private _totalStaked;
+  uint256 private _totalSupply;
   uint256 private _firstPlan;
   uint256 private _secondPlan;
   uint256 private _thirdPlan;
+
+  mapping(address => Stake) private _stakes;
+  mapping(uint256 => uint256) private _timestampToPlan;
 
   struct Stake {
     uint256 amount;
@@ -32,14 +37,12 @@ contract Staking is Ownable {
     _;
   }
 
-  mapping(address => Stake) private _stakes;
-  mapping(uint256 => uint256) private _timestampToPlan;
-
-  constructor(IERC20 _contractAddress) {
+    constructor(IERC20 _contractAddress) {
     _tokenAddress = _contractAddress;
     //2592000
     //7776000
     //15552000
+    //30 days
     _firstPlan = 20;
     _secondPlan = 40;
     _thirdPlan = 60;
@@ -47,17 +50,29 @@ contract Staking is Ownable {
     _timestampToPlan[_secondPlan] = 20;
     _timestampToPlan[_thirdPlan] = 75;
     _isActive = true;
-    _coverage = 0;
-    _minStaked = 100;
+    _minStakingAmount = 100;
+  }
+  
+  // ---> Views external
+  function totalSupply() external view returns (uint256) {
+    return _totalSupply;
   }
 
-  function setStatus(bool status) public onlyOwner {
-    _isActive = status;
+  function getResources() external onlyOwner view returns (uint256) {
+    return _resources;
   }
 
+  function getCoverage() external onlyOwner view returns (uint256) {
+    return _coverage;
+  }
+
+  function balanceOf() external view returns (uint256) {
+    return _stakes[msg.sender].amount;
+  }
+
+  // ---> Views internal
   function calculateReward(uint256 plan, uint256 amount) internal pure returns (uint256) {
-    uint256 reward = amount.mul(plan).div(100);
-    return reward;
+    return amount.mul(plan).div(100);
   }
 
   function calculatePlan(uint256 time) internal view returns (uint256) {
@@ -71,28 +86,30 @@ contract Staking is Ownable {
     return amount.mul(_timestampToPlan[_thirdPlan]).div(100);
   }
 
+  // ---> Mutative functions
+  function setStatus(bool status) public onlyOwner {
+    _isActive = status;
+  }
+
   function topUp(uint256 amount) public onlyOwner {
     _tokenAddress.transferFrom(msg.sender, address(this), amount);
     _resources = _resources.add(amount);
+    _totalSupply = _totalSupply.add(amount);
+    emit ToppedUp(amount);
   }
 
-  function getResources() public onlyOwner view returns (uint256) {
-    return _resources;
-  }
-
-  function getCoverage() public onlyOwner view returns (uint256) {
-    return _coverage;
-  }
-
-  function getAmount() public view returns (uint256) {
-    return _stakes[msg.sender].amount;
+  function getUncoveredResources() public onlyOwner {
+    _tokenAddress.safeTransfer(msg.sender, _totalSupply.sub(_coverage));
   }
 
   function stake(uint256 amount) public checkActive checkCoverage(amount) {
-    require(amount >= _minStaked, "The minimum staking amount is 100");
-    _stakes[msg.sender] = Stake(amount, block.timestamp);
+    require(amount >= _minStakingAmount, "Minimum staking amount not satisfied");
+    _stakes[msg.sender] = Stake(amount.add(_stakes[msg.sender].amount), block.timestamp);
     _coverage = _coverage.add(calculateCover(amount));
+    _totalStaked = _totalStaked.add(amount);
+    _totalSupply = _totalSupply.add(amount);
     _tokenAddress.safeTransferFrom(msg.sender, address(this), amount);
+    emit Staked(msg.sender, amount);
   }
 
   function unstake() public {
@@ -101,9 +118,17 @@ contract Staking is Ownable {
     uint256 cover = calculateCover(staked);
     uint256 plan = calculatePlan(_stakes[msg.sender].timestamp);
     uint256 reward = calculateReward(plan, staked);
+    uint256 total = staked.add(reward);
     _coverage = _coverage.sub(cover);
     _resources = _resources.sub(reward);
+    _totalSupply = _totalSupply.sub(total);
+    _totalStaked = _totalStaked.sub(staked);
     _stakes[msg.sender].amount = 0;
-    _tokenAddress.transfer(msg.sender, staked.add(reward));
+    _tokenAddress.transfer(msg.sender, total);
+    emit Unstaked(msg.sender, total);
   }
+
+  event Staked(address user, uint256 amount);
+  event Unstaked(address user, uint256 reward);
+  event ToppedUp(uint256 amount);
 }

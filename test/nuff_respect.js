@@ -1,6 +1,7 @@
 const NuffRespect = artifacts.require("NuffRespect");
 const Staking = artifacts.require("Staking");
 const StakingExposedTest = artifacts.require("StakingExposedTest");
+const truffleAssert = require('truffle-assertions');
 
 contract("NuffRespect", function (accounts) {
   it("should assert true", async function () {
@@ -115,7 +116,22 @@ contract("Staking", function (accounts) {
     );
   });
 
-  it("stake should throw an exception when below 100", async () => {});
+  it("stake should throw an exception when below 100", async () => {
+    const staking = await Staking.deployed();
+    const nuff = await NuffRespect.deployed();
+    const amount = 10;
+    const topUp = 500;
+    const account_one = accounts[0];
+    const account_two = staking.address;
+
+    await nuff.approve(staking.address, amount+topUp);
+    await staking.topUp(topUp, { from: account_one });
+
+    await truffleAssert.reverts(
+      staking.stake(amount),
+      "Minimum staking amount not satisfied"
+    )
+  });
 
   it("stake should throw an exception when not enough allowance", async () => {});
 
