@@ -33,7 +33,7 @@ contract Staking is Ownable {
   }
 
   modifier checkCoverage(uint256 amount) {
-    require(_resources >= _coverage.add(calculateCover(amount)));
+    require(_resources >= _coverage.add(calculateCover(amount)), "Staking is inactive");
     _;
   }
 
@@ -43,9 +43,9 @@ contract Staking is Ownable {
     //7776000
     //15552000
     //30 days
-    _firstPlan = 20;
-    _secondPlan = 40;
-    _thirdPlan = 60;
+    _firstPlan = 1 minutes;
+    _secondPlan = 2 minutes;
+    _thirdPlan = 3 minutes;
     _timestampToPlan[_firstPlan] = 5;
     _timestampToPlan[_secondPlan] = 20;
     _timestampToPlan[_thirdPlan] = 75;
@@ -58,6 +58,10 @@ contract Staking is Ownable {
     return _totalSupply;
   }
 
+  function getStatus() external view returns (bool) {
+    return _isActive;
+  }
+
   function getResources() external onlyOwner view returns (uint256) {
     return _resources;
   }
@@ -66,12 +70,13 @@ contract Staking is Ownable {
     return _coverage;
   }
 
-  function balanceOf() external view returns (uint256) {
-    return _stakes[msg.sender].amount;
+  function balanceOf(address account) external view returns (uint256) {
+    return _stakes[account].amount;
   }
 
   // ---> Views internal
   function calculateReward(uint256 plan, uint256 amount) internal pure returns (uint256) {
+    if (plan == 0) return 0;
     return amount.mul(plan).div(100);
   }
 
@@ -79,7 +84,8 @@ contract Staking is Ownable {
     uint256 passed = block.timestamp.sub(time);
     if (passed >= _thirdPlan) return _timestampToPlan[_thirdPlan];
     if (passed >= _secondPlan) return _timestampToPlan[_secondPlan];
-    return _timestampToPlan[_firstPlan];
+    if (passed >= _firstPlan) return _timestampToPlan[_firstPlan];
+    return 0;
   }
 
   function calculateCover(uint256 amount) internal view returns (uint256) {
