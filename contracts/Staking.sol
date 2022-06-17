@@ -33,24 +33,20 @@ contract Staking is Ownable {
   }
 
   modifier checkCoverage(uint256 amount) {
-    require(_resources >= _coverage.add(calculateCover(amount)), "Staking is inactive");
+    require(_resources >= _coverage.add(_calculateCover(amount)), "Staking is inactive");
     _;
   }
 
     constructor(IERC20 _contractAddress) {
     _tokenAddress = _contractAddress;
-    //2592000
-    //7776000
-    //15552000
-    //30 days
     _firstPlan = 1 minutes;
     _secondPlan = 2 minutes;
     _thirdPlan = 3 minutes;
     _timestampToPlan[_firstPlan] = 5;
     _timestampToPlan[_secondPlan] = 20;
     _timestampToPlan[_thirdPlan] = 75;
-    _isActive = true;
     _minStakingAmount = 100;
+    _isActive = true;
   }
   
   // ---> Views external
@@ -58,29 +54,37 @@ contract Staking is Ownable {
     return _totalSupply;
   }
 
-  function getStatus() external view returns (bool) {
+  function status() external view returns (bool) {
     return _isActive;
   }
 
-  function getResources() external onlyOwner view returns (uint256) {
+  function resources() external view returns (uint256) {
     return _resources;
   }
 
-  function getCoverage() external onlyOwner view returns (uint256) {
+  function coverage() external onlyOwner view returns (uint256) {
     return _coverage;
+  }
+
+  function totalStaked() external onlyOwner view returns (uint256) {
+    return _totalStaked;
   }
 
   function balanceOf(address account) external view returns (uint256) {
     return _stakes[account].amount;
   }
 
+  function planOf(address account) external view returns (uint256) {
+    return _calculatePlan(_stakes[account].timestamp);
+  }
+
   // ---> Views internal
-  function calculateReward(uint256 plan, uint256 amount) internal pure returns (uint256) {
+  function _calculateReward(uint256 plan, uint256 amount) internal pure returns (uint256) {
     if (plan == 0) return 0;
     return amount.mul(plan).div(100);
   }
 
-  function calculatePlan(uint256 time) internal view returns (uint256) {
+  function _calculatePlan(uint256 time) internal view returns (uint256) {
     uint256 passed = block.timestamp.sub(time);
     if (passed >= _thirdPlan) return _timestampToPlan[_thirdPlan];
     if (passed >= _secondPlan) return _timestampToPlan[_secondPlan];
@@ -88,13 +92,13 @@ contract Staking is Ownable {
     return 0;
   }
 
-  function calculateCover(uint256 amount) internal view returns (uint256) {
+  function _calculateCover(uint256 amount) internal view returns (uint256) {
     return amount.mul(_timestampToPlan[_thirdPlan]).div(100);
   }
 
   // ---> Mutative functions
-  function setStatus(bool status) public onlyOwner {
-    _isActive = status;
+  function setStatus(bool newStatus) public onlyOwner {
+    _isActive = newStatus;
   }
 
   function topUp(uint256 amount) public onlyOwner {
@@ -104,14 +108,15 @@ contract Staking is Ownable {
     emit ToppedUp(amount);
   }
 
-  function getUncoveredResources() public onlyOwner {
+  function getNotCoveredResources() public onlyOwner {
+    //todo
     _tokenAddress.safeTransfer(msg.sender, _totalSupply.sub(_coverage));
   }
 
   function stake(uint256 amount) public checkActive checkCoverage(amount) {
     require(amount >= _minStakingAmount, "Minimum staking amount not satisfied");
     _stakes[msg.sender] = Stake(amount.add(_stakes[msg.sender].amount), block.timestamp);
-    _coverage = _coverage.add(calculateCover(amount));
+    _coverage = _coverage.add(_calculateCover(amount));
     _totalStaked = _totalStaked.add(amount);
     _totalSupply = _totalSupply.add(amount);
     _tokenAddress.safeTransferFrom(msg.sender, address(this), amount);
@@ -121,9 +126,9 @@ contract Staking is Ownable {
   function unstake() public {
     uint256 staked = _stakes[msg.sender].amount;
     require(staked > 0, "Nothing to unstake");
-    uint256 cover = calculateCover(staked);
-    uint256 plan = calculatePlan(_stakes[msg.sender].timestamp);
-    uint256 reward = calculateReward(plan, staked);
+    uint256 cover = _calculateCover(staked);
+    uint256 plan = _calculatePlan(_stakes[msg.sender].timestamp);
+    uint256 reward = _calculateReward(plan, staked);
     uint256 total = staked.add(reward);
     _coverage = _coverage.sub(cover);
     _resources = _resources.sub(reward);

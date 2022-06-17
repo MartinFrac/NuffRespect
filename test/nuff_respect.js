@@ -2,6 +2,10 @@ const NuffRespect = artifacts.require("NuffRespect");
 const Staking = artifacts.require("Staking");
 const StakingExposedTest = artifacts.require("StakingExposedTest");
 const truffleAssert = require("truffle-assertions");
+const zeppelinHelpers = require("@openzeppelin/test-helpers");
+const jsonrpc = "2.0";
+const id = 0;
+
 
 contract("NuffRespect", function (accounts) {
   const account_one = accounts[0];
@@ -21,19 +25,29 @@ contract("NuffRespect", function (accounts) {
   });
 });
 
-contract("getAmount", function (accounts) {
+contract("Staking", function (accounts) {
+  let staking;
+  let nuff;
   const account_one = accounts[0];
+  const account_two = accounts[1];
+
+  beforeEach("Contract setup for testing", async () => {
+    nuff = await NuffRespect.new();
+    staking = await Staking.new(nuff.address);
+  });
+
+  it("Contract can deploy", async function () {
+    assert(staking);
+  });
 
   it("get amount should return amount", async () => {
-    const staking = await Staking.deployed();
-    const nuff = await NuffRespect.deployed();
     const topUp = 100;
 
     const expected1 = 0;
     const expected2 = 100;
 
     const amount1 = await staking.balanceOf(account_one);
-    await nuff.approve(staking.address, topUp+expected2);
+    await nuff.approve(staking.address, topUp + expected2);
     await staking.topUp(topUp);
     await staking.stake(expected2);
     const amount2 = await staking.balanceOf(account_one);
@@ -41,53 +55,21 @@ contract("getAmount", function (accounts) {
     assert.equal(expected1, amount1);
     assert.equal(expected2, amount2);
   });
-})
-
-contract("StakingViews", function (accounts) {
-  const account_one = accounts[0];
-  const account_two = accounts[1];
-
-  it("get coverage should return coverage", async () => {
-    const staking = await Staking.deployed();
-    const nuff = await NuffRespect.deployed();
-    const expected1 = 0;
-    const expected2 = 75;
-    const amount = 100;
-
-    const coverage1 = await staking.getCoverage.call();
-    await nuff.approve(staking.address, amount+expected2);
-    await staking.topUp(expected2);
-    await staking.stake(amount);
-    const coverage2 = await staking.getCoverage.call();
-
-    assert.equal(expected1, coverage1);
-    assert.equal(expected2, coverage2);
-  });
-
-})
-
-contract("Staking", function (accounts) {
-  const account_one = accounts[0];
-  const account_two = accounts[1];
 
   it("get resources should return resources", async () => {
-    const staking = await Staking.deployed();
-    const nuff = await NuffRespect.deployed();
     const expected1 = 0;
     const expected2 = 20;
-    
-    const resources1 = await staking.getResources.call();
+
+    const resources1 = await staking.resources.call();
     await nuff.approve(staking.address, 20);
     await staking.topUp(20);
-    const resources2 = await staking.getResources.call();
+    const resources2 = await staking.resources.call();
 
     assert.equal(expected1, resources1);
     assert.equal(expected2, resources2);
   });
 
   it("stake should throw an exception when resources are not sufficient", async () => {
-    const staking = await Staking.deployed();
-    const nuff = await NuffRespect.deployed();
     const amount = 100;
 
     await nuff.approve(staking.address, amount);
@@ -96,9 +78,6 @@ contract("Staking", function (accounts) {
   });
 
   it("approve should set allowance", async () => {
-    const staking = await Staking.deployed();
-    const nuff = await NuffRespect.deployed();
-
     const amount = 100;
     await nuff.approve(staking.address, amount, { from: account_one });
     let allowance = await nuff.allowance(account_one, staking.address);
@@ -106,7 +85,6 @@ contract("Staking", function (accounts) {
   });
 
   it("stake should revert without allowance", async () => {
-    const staking = await Staking.deployed();
     await truffleAssert.reverts(staking.stake(100));
   });
 
@@ -115,7 +93,7 @@ contract("Staking", function (accounts) {
     const amount = 100;
     const plan = 10;
     const expected = 10;
-    const actual = await stakingExp._calculateReward(plan, amount);
+    const actual = await stakingExp.calculateReward(plan, amount);
     assert.equal(expected, actual);
   });
 
@@ -124,7 +102,7 @@ contract("Staking", function (accounts) {
     const amount = 111;
     const plan = 75;
     const expected = 83;
-    const actual = await stakingExp._calculateReward(plan, amount);
+    const actual = await stakingExp.calculateReward(plan, amount);
     assert.equal(expected, actual);
   });
 
@@ -132,7 +110,7 @@ contract("Staking", function (accounts) {
     const stakingExp = await StakingExposedTest.deployed();
     const time = Math.floor(new Date().getTime() / 1000) - 75;
     const expected = 5;
-    const actual = await stakingExp._calculatePlan(time);
+    const actual = await stakingExp.calculatePlan(time);
     assert.equal(expected, actual);
   });
 
@@ -140,7 +118,7 @@ contract("Staking", function (accounts) {
     const stakingExp = await StakingExposedTest.deployed();
     const amount = 100;
     const expected = 75;
-    const actual = await stakingExp._calculateCover(amount);
+    const actual = await stakingExp.calculateCover(amount);
     assert.equal(expected, actual);
   });
 
@@ -148,13 +126,11 @@ contract("Staking", function (accounts) {
     const stakingExp = await StakingExposedTest.deployed();
     const amount = 111;
     const expected = 83;
-    const actual = await stakingExp._calculateCover(amount);
+    const actual = await stakingExp.calculateCover(amount);
     assert.equal(expected, actual);
   });
 
   it("unstake should throw an exception when nothing to unstake", async () => {
-    const staking = await Staking.deployed();
-    const nuff = await NuffRespect.deployed();
     const topUp = 500;
 
     await nuff.approve(staking.address, topUp);
@@ -164,8 +140,6 @@ contract("Staking", function (accounts) {
   });
 
   it("should stake 100", async () => {
-    const staking = await Staking.deployed();
-    const nuff = await NuffRespect.deployed();
     const amount = BigInt(100);
 
     await nuff.approve(staking.address, 500, { from: account_one });
@@ -205,8 +179,6 @@ contract("Staking", function (accounts) {
   });
 
   it("stake should throw an exception when below 100", async () => {
-    const staking = await Staking.deployed();
-    const nuff = await NuffRespect.deployed();
     const amount = 10;
     const topUp = 500;
 
@@ -220,8 +192,6 @@ contract("Staking", function (accounts) {
   });
 
   it("stake should throw an exception when not enough balance", async () => {
-    const staking = await Staking.deployed();
-    const nuff = await NuffRespect.deployed();
     const amount = 100;
     const topUp = 500;
     const expected = 0;
@@ -242,8 +212,6 @@ contract("Staking", function (accounts) {
   });
 
   it("stake should throw an exception when inactive", async () => {
-    const staking = await Staking.deployed();
-    const nuff = await NuffRespect.deployed();
     const amount = 100;
     const topUp = 500;
 
@@ -256,16 +224,14 @@ contract("Staking", function (accounts) {
     await staking.setStatus(true);
   });
 
-
-
-
   it("should stake 100 and unstake 175", async () => {
-    const staking = await Staking.deployed();
-    const nuff = await NuffRespect.deployed();
     const amount = BigInt(100);
+    const topUp = 75;
+    const expected1 = 75;
+    const expected2 = -75;
 
-    await nuff.approve(staking.address, 75, { from: account_one });
-    await staking.topUp(75, { from: account_one });
+    await nuff.approve(staking.address, topUp, { from: account_one });
+    await staking.topUp(topUp, { from: account_one });
 
     let balance = await nuff.balanceOf(account_one);
     balance = BigInt(balance);
@@ -273,6 +239,7 @@ contract("Staking", function (accounts) {
 
     balance = await nuff.balanceOf(staking.address);
     const account_two_starting_balance = BigInt(balance);
+
     await nuff.approve(staking.address, amount, { from: account_one });
     let allowance = await nuff.allowance(account_one, staking.address);
 
@@ -280,6 +247,22 @@ contract("Staking", function (accounts) {
       from: account_one,
     });
 
-    //time forward
+    await zeppelinHelpers.time.increase(zeppelinHelpers.time.duration.minutes(4));
+
+    await staking.unstake();
+
+    balance = await nuff.balanceOf(account_one);
+    const account_one_ending_balance = BigInt(balance);
+    balance = await nuff.balanceOf(staking.address);
+    const account_two_ending_balance = BigInt(balance);
+
+    assert.equal(
+      expected1,
+      account_one_ending_balance - account_one_starting_balance
+    );
+    assert.equal(
+      expected2,
+      account_two_ending_balance - account_two_starting_balance
+    );
   });
 });

@@ -11,15 +11,15 @@ contract StakingExposedTest is Staking {
   } 
 
   mapping(uint256 => uint256) private _timestampToPlan;
-  function _calculateReward(uint256 plan, uint256 amount) public pure returns (uint256) {
-    return calculateReward(plan, amount);
+  function calculateReward(uint256 plan, uint256 amount) public pure returns (uint256) {
+    return _calculateReward(plan, amount);
   }
 
-  function _calculatePlan(uint256 time) public view returns (uint256) {
-    return calculatePlan(time);
+  function calculatePlan(uint256 time) public view returns (uint256) {
+    return _calculatePlan(time);
   }
 
-  function _calculateCover(uint256 amount) public view returns (uint256) {
-    return calculateCover(amount);
+  function calculateCover(uint256 amount) public view returns (uint256) {
+    return _calculateCover(amount);
   }
 }
