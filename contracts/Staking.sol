@@ -35,7 +35,7 @@ contract Staking is Ownable {
   }
 
   modifier checkCoverage(uint256 amount) {
-    require(_resources >= _coverage.add(_calculateCover(amount)), "Staking is inactive");
+    require(_resources >= _coverage.add(_calculateCover(amount)), "amount exceeds resources");
     _;
   }
 
