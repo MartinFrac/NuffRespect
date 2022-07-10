@@ -11,7 +11,9 @@ contract Staking is Ownable {
   IERC20 private _tokenAddress;
   bool private _isActive;
   uint256 private _minStakingAmount;
+  //reward pool
   uint256 private _resources;
+  //locked rewards for current stakers
   uint256 private _coverage;
   uint256 private _totalStaked;
   uint256 private _totalSupply;
@@ -109,8 +111,10 @@ contract Staking is Ownable {
   }
 
   function getNotCoveredResources() public onlyOwner {
-    //todo
-    _tokenAddress.safeTransfer(msg.sender, _totalSupply.sub(_coverage));
+    uint256 amount = _resources.sub(_coverage);
+    _resources = _coverage;
+    _totalSupply = _totalSupply.sub(amount);
+    _tokenAddress.safeTransfer(msg.sender, amount);
   }
 
   function stake(uint256 amount) public checkActive checkCoverage(amount) {

@@ -6,7 +6,6 @@ const zeppelinHelpers = require("@openzeppelin/test-helpers");
 const jsonrpc = "2.0";
 const id = 0;
 
-
 contract("NuffRespect", function (accounts) {
   const account_one = accounts[0];
   const account_two = accounts[1];
@@ -30,6 +29,17 @@ contract("Staking", function (accounts) {
   let nuff;
   const account_one = accounts[0];
   const account_two = accounts[1];
+  const account_three = accounts[2];
+
+  const topUp = async (amount) => {
+    await nuff.approve(staking.address, amount, { from: account_one });
+    await staking.topUp(amount, { from: account_one });
+  };
+
+  const stake = async (amount, account) => {
+    await nuff.approve(staking.address, amount, { from: account });
+    await staking.stake(amount, { from: account });
+  };
 
   beforeEach("Contract setup for testing", async () => {
     nuff = await NuffRespect.new();
@@ -38,6 +48,65 @@ contract("Staking", function (accounts) {
 
   it("Contract can deploy", async function () {
     assert(staking);
+  });
+
+  it("getNotCoveredResources should send all resources to the owner when nothing staked", async function () {
+    const topUpAmount = 10_000;
+    const balanceStart = BigInt(await nuff.balanceOf(account_one));
+    await topUp(topUpAmount);
+    await staking.getNotCoveredResources();
+    const balanceEnd = BigInt(await nuff.balanceOf(account_one));
+    assert.equal(balanceStart, balanceEnd);
+  });
+
+  it("getNotCoveredResources should avoid covered resources when sending tokens back to the owner", async function () {
+    const stakingExp = await StakingExposedTest.deployed();
+    const topUpAmount = 10_000;
+    const stakedAmount = 500;
+    await nuff.transfer(account_two, stakedAmount);
+    await nuff.approve(staking.address, topUpAmount);
+    let balanceStart = await nuff.balanceOf(account_one);
+    balanceStart = BigInt(balanceStart);
+
+    await topUp(topUpAmount);
+    await stake(stakedAmount, account_two);
+
+    const coverage = await stakingExp.calculateCover(stakedAmount);
+    let expected = coverage;
+    expected = BigInt(expected);
+
+    await staking.getNotCoveredResources();
+    let balanceEnd = await nuff.balanceOf(account_one);
+    balanceEnd = BigInt(balanceEnd);
+
+    const actual = balanceStart - balanceEnd;
+    assert.equal(expected, actual);
+  });
+
+  it("getNotCoveredResources should avoid covered resources when sending tokens back to the owner with two accounts", async function () {
+    const stakingExp = await StakingExposedTest.deployed();
+    const topUpAmount = 10_000;
+    const stakingAmount1 = 500;
+    const stakingAmount2 = 1322;
+    await nuff.transfer(account_two, stakingAmount1);
+    await nuff.transfer(account_three, stakingAmount2);
+
+    const startBalance = BigInt(await nuff.balanceOf(account_one));
+    await topUp(topUpAmount);
+    await stake(stakingAmount1, account_two);
+    await stake(stakingAmount2, account_three);
+    const coverage1 = BigInt(await stakingExp.calculateCover(stakingAmount1));
+    const coverage2 = BigInt(await stakingExp.calculateCover(stakingAmount2));
+
+    await staking.getNotCoveredResources();
+    const resources = BigInt(await staking.resources());
+    const coverage = BigInt(await staking.coverage());
+
+    const endBalance = BigInt(await nuff.balanceOf(account_one));
+
+    assert.equal(coverage1 + coverage2, resources);
+    assert.equal(coverage1 + coverage2, coverage);
+    assert.equal(startBalance, endBalance + coverage1 + coverage2);
   });
 
   it("get amount should return amount", async () => {
@@ -106,13 +175,13 @@ contract("Staking", function (accounts) {
     assert.equal(expected, actual);
   });
 
-  it("calculate plan should return 5 when time is within 75 seconds", async () => {
-    const stakingExp = await StakingExposedTest.deployed();
-    const time = Math.floor(new Date().getTime() / 1000) - 75;
-    const expected = 5;
-    const actual = await stakingExp.calculatePlan(time);
-    assert.equal(expected, actual);
-  });
+  // it("calculate plan should return 5 when time is within 75 seconds", async () => {
+  //   const stakingExp = await StakingExposedTest.deployed();
+  //   const time = Math.floor(new Date().getTime() / 1000) - 75;
+  //   const expected = 5;
+  //   const actual = await stakingExp.calculatePlan(time);
+  //   assert.equal(expected, actual);
+  // });
 
   it("calculate cover should return 75% of the amount", async () => {
     const stakingExp = await StakingExposedTest.deployed();
@@ -146,7 +215,6 @@ contract("Staking", function (accounts) {
     await staking.topUp(500, { from: account_one });
 
     let balance = await nuff.balanceOf(account_one);
-    balance = BigInt(balance);
     const account_one_starting_balance = BigInt(balance);
 
     balance = await nuff.balanceOf(staking.address);
@@ -234,7 +302,6 @@ contract("Staking", function (accounts) {
     await staking.topUp(topUp, { from: account_one });
 
     let balance = await nuff.balanceOf(account_one);
-    balance = BigInt(balance);
     const account_one_starting_balance = BigInt(balance);
 
     balance = await nuff.balanceOf(staking.address);
@@ -247,7 +314,9 @@ contract("Staking", function (accounts) {
       from: account_one,
     });
 
-    await zeppelinHelpers.time.increase(zeppelinHelpers.time.duration.minutes(4));
+    await zeppelinHelpers.time.increase(
+      zeppelinHelpers.time.duration.minutes(4)
+    );
 
     await staking.unstake();
 
